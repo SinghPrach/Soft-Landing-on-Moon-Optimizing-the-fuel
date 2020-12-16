@@ -1,0 +1,73 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from gekko import GEKKO
+
+m = GEKKO(remote=False)
+nt = 101; m.time = np.linspace(0,1,nt)
+
+# Variables
+x = m.Var(value=50000,lb=0)
+v = m.Var(value=150,lb=0)
+q = m.Var(value=2010.51,ub=2730.14)
+u = m.Var(value=0,ub=1)
+
+p = np.zeros(nt); p[-1] = 1.0
+final = m.Param(value=p)
+
+# Equations
+m.Equation(x.dt()==v)
+m.Equation(v.dt()==(-1.63)+(u/q))
+m.Equation(q.dt()==(-636)*u)
+
+# Final conditions
+soft = True
+if soft:
+    # soft terminal constraint
+    m.Minimize(final*1e5*x**2)
+    m.Minimize(final*1e5*(v+1)**2)
+else:
+    # hard terminal constraint
+    xf = m.Param();    vf = m.Param()
+    m.free(xf);        m.free(vf)
+    m.fix_final(xf,0); m.fix_final(vf,0); m.fix_final(qf,2010.51)
+    # connect endpoint parameters to x and v
+    m.Equations([xf==x,vf==v,qf==q])
+
+# Objective Function
+obj = m.Intermediate(m.integral(-u))
+m.Minimize(final*obj)
+
+m.options.IMODE = 6
+m.options.NODES = 2
+m.solve()
+
+
+# Create a figure
+plt.figure(figsize=(10,4))
+
+
+plt.subplot(2,2,1)
+plt.plot([0,1],[50000,1],'r:',label=r'$x$')
+plt.xlabel('Time')
+plt.ylabel('Height')
+plt.legend(loc='best')
+
+plt.subplot(2,2,2)
+plt.plot([0,1],[150,1],'b--',lw=2,label=r'$v$')
+plt.xlabel('Time')
+plt.ylabel('Velocity')
+plt.legend(loc='best')
+
+plt.subplot(2,2,3)
+plt.plot(m.time,u.value,'r--',lw=2,label=r'$u$')
+plt.xlabel('Time')
+plt.ylabel('Thrust')
+plt.legend(loc='best')
+
+plt.subplot(2,2,4)
+plt.plot(m.time,obj.value,'g-',lw=2,label=r'$\int -u$')
+plt.ylabel('Objective')
+plt.legend(loc='best')
+plt.xlabel('Time')
+
+plt.show()
